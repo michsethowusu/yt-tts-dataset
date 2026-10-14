@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yt-tts-dataset"
+version = "0.1.0"
+description = "YouTube playlist / video URLs -> single-speaker, transcribed TTS dataset (diarization, Demucs, Gemini, CTC cross-check)"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Mich-Seth Owusu" }]
+requires-python = ">=3.10"
+dependencies = [
+    "tomli>=2.0; python_version < '3.11'",
+    "numpy<2",
+    "soundfile",
+    "torch",
+    "torchaudio",
+    "pyannote.audio==3.3.2",
+    "huggingface_hub<0.26",
+    "silero-vad",
+    "demucs==4.0.1",
+    "aiohttp",
+    "yt-dlp",
+    "yt-split-downloader @ git+https://github.com/michsethowusu/yt-split-downloader",
+]
+
+[project.scripts]
+yt-tts-dataset = "yt_tts_dataset.cli:main"
+
+[tool.setuptools]
+packages = ["yt_tts_dataset"]

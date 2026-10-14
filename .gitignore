@@ -1,0 +1,7 @@
+data/
+config.toml
+.env
+*.tmp
+__pycache__/
+*.egg-info/
+.venv*/

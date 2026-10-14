@@ -1,0 +1,68 @@
+# yt-tts-dataset config. Copy to config.toml and edit; every stage reads it.
+# Paths are relative to this file unless absolute.
+
+data_dir = "data"                  # everything the pipeline writes goes here
+
+[source]
+# YouTube playlists / channels / single videos, and/or a file with one URL per line
+urls = ["https://www.youtube.com/playlist?list=PL-kyjef1t36AkJXeT6r0Y9p8_CjtDQS-T"]
+urls_file = ""
+min_minutes = 20                   # skip videos shorter than this (e.g. clips/excerpts of full episodes)
+max_minutes = 0                    # 0 = no limit
+
+[download]
+# Downloads go through yt-split-downloader (github.com/michsethowusu/yt-split-downloader): media URLs are
+# resolved on this machine, the bytes are downloaded where the backend says.
+backend = "local"                  # "local" (here) | "ssh" (a server, e.g. a GPU box YouTube blocks) | "modal"
+format = "ba[protocol=https][acodec=opus]/ba[protocol=https]"   # best audio only; opus is 48 kHz
+workers = 5                        # parallel aria2c downloads
+connections = 16                   # aria2c connections per file
+cookies = ""                       # cookies.txt, if some videos need sign-in
+host = ""                          # ssh: alias or user@host
+remote_dir = ""                    # ssh: download folder on the server (videos land in <remote_dir>/videos)
+remote_python = "python3"
+stall_minutes = 30                 # stop waiting when nothing new arrives for this long
+audio_dir = ""                     # where the other stages find <id>.*; default <data_dir>/yt/videos
+                                   # (ssh, stages run on the server: set to <remote_dir>/videos)
+
+[diarize]
+model = "pyannote/speaker-diarization-3.1"   # gated: accept the terms on HF, set HF_TOKEN
+
+[segment]
+sample_rate = 48000                # sample rate of masters and segments
+min_speaker_minutes = 3.0          # labels with less total speech are treated as spurious clusters
+min_dur = 3.0
+max_dur = 15.0
+join_gap = 0.6                     # join one speaker's VAD pieces across pauses shorter than this
+pad = 0.1
+
+[demucs]
+enabled = true                     # vocals stem only (removes music beds / jingles)
+model = "htdemucs"
+batch = 32
+
+[transcribe]
+model = "gemini-3.8-flash"         # GEMINI_API_KEY in the environment or a .env next to this file
+thinking = "low"
+concurrency = 64                   # requests in flight
+audio = "segments"                 # "segments" (original) or "vocals" (Demucs output)
+language = "Twi (Akan)"
+code_switch = "English"            # "" if speakers use one language only
+orthography = "standard Akan orthography (use ɛ and ɔ)"
+context = "a Ghanaian podcast"
+example = "ɛnnɛ yɛbɛkasa afa music industry no ho"
+prompt = ""                        # full custom prompt; overrides the template built from the fields above
+
+[crosscheck]
+enabled = true
+model = "omniASR_CTC_1B_v2"        # second opinion; segments where it disagrees widely with Gemini are dropped
+python = ""                        # python of a venv with omnilingual-asr (+ this package); "" = current one
+batch = 32
+
+[build]
+max_cer = 50                       # % CER(Gemini -> omni) on letters only; see `yt-tts-dataset report`
+drop_digits = true                 # spoken form of digits is ambiguous
+min_cps = 4                        # characters per second outside this range = likely misaligned text
+max_cps = 30
+val_episodes = 2                   # whole episodes held out for validation
+seed = 0
