@@ -134,7 +134,8 @@ async def _run(cfg, follow):
     use_vocals = t["audio"] == "vocals"
     src_dir = cfg.dir("vocals" if use_vocals else "segs")
     seg_dir, out_dir = cfg.dir("segs"), cfg.dir("text")
-    ids = cfg.ids()
+    i, n = cfg.raw.get("_shard", (0, 1))
+    ids = cfg.ids()[i::n]
     sem = asyncio.Semaphore(t["concurrency"])
 
     async def one(session, vid):

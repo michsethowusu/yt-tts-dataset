@@ -110,8 +110,10 @@ def each_episode(cfg, upstream, out, fn, follow=False, poll=60):
     """Run fn(id) for every episode whose `upstream(id)` file exists and `out(id)` does not.
 
     With follow=True keep polling until every episode is done, so a stage can run alongside the stage
-    feeding it."""
+    feeding it. With --shard i --nshards n only every n-th episode (from i) is this process's."""
     ids = cfg.ids()
+    i, n = cfg.raw.get("_shard", (0, 1))  # set by the CLI's --shard/--nshards
+    ids = ids[i::n]
     while True:
         todo = [v for v in ids if not Path(out(v)).exists()]
         ready = [v for v in todo if Path(upstream(v)).exists()]

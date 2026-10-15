@@ -70,15 +70,16 @@ def main():
     for s in STAGES:
         p = sub.add_parser(s)
         p.add_argument("--follow", action="store_true", help="keep waiting for the previous stage until all done")
-        if s == "diarize":
-            p.add_argument("--shard", type=int, default=0)
-            p.add_argument("--nshards", type=int, default=1)
+        p.add_argument("--shard", type=int, default=0, help="this process's share: every nshards-th episode from shard")
+        p.add_argument("--nshards", type=int, default=1, help="run n processes of a stage side by side")
         if s == "transcribe":
             p.add_argument("--retry-failed", action="store_true", help="re-request segments that came back null")
     sub.add_parser("report", help="hours kept at each filter setting")
     sub.add_parser("build", help="apply [build] filters and write dataset/")
     args = ap.parse_args()
     cfg = config.load(args.config)
+    if getattr(args, "nshards", 1) > 1:
+        cfg.raw["_shard"] = (args.shard, args.nshards)
 
     if args.cmd == "run":
         run_all(cfg, args)
@@ -95,6 +96,7 @@ def main():
         from .transcribe import retry_failed
         retry_failed(cfg)
     elif args.cmd == "diarize":
+        cfg.raw.pop("_shard", None)  # diarize shards itself (its engine may re-run in another venv)
         run_stage(cfg, "diarize", args.follow, shard=args.shard, nshards=args.nshards)
     else:
         run_stage(cfg, args.cmd, args.follow)

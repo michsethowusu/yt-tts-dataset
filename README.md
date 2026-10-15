@@ -67,7 +67,8 @@ yt-tts-dataset build                   # apply [build] filters, write data/datas
 `run` starts every stage as its own process (logs in `data/logs/`); each picks up episodes as the
 stage before it finishes them, so the GPU stages and the transcription requests overlap. `run --sequential`
 does one stage at a time. Stages can also be run alone, e.g. `yt-tts-dataset transcribe --follow`,
-`yt-tts-dataset diarize --shard 0 --nshards 3` (several diarization processes on one GPU), or
+`yt-tts-dataset segment --shard 0 --nshards 2` (any stage can run as several processes side by side,
+each taking every n-th episode), or
 `yt-tts-dataset transcribe --retry-failed`.
 
 ### Downloading
