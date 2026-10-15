@@ -21,7 +21,7 @@ DEFAULTS = {
     "segment": {"sample_rate": 48000, "min_speaker_minutes": 3.0, "min_dur": 3.0, "max_dur": 15.0,
                 "join_gap": 0.6, "pad": 0.1},
     "demucs": {"enabled": True, "model": "htdemucs", "batch": 32},
-    "transcribe": {"model": "gemini-3.8-flash", "thinking": "low", "concurrency": 64, "audio": "segments",
+    "transcribe": {"engine": "gemini", "google_language": "", "workers": 16, "model": "gemini-3.8-flash", "thinking": "low", "concurrency": 64, "audio": "segments",
                    "language": "", "code_switch": "", "orthography": "", "context": "a podcast",
                    "example": "", "prompt": ""},
     "crosscheck": {"enabled": True, "model": "omniASR_CTC_1B_v2", "python": "", "batch": 32},

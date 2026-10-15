@@ -42,9 +42,12 @@ model = "htdemucs"
 batch = 32
 
 [transcribe]
-model = "gemini-3.8-flash"         # GEMINI_API_KEY in the environment or a .env next to this file
+engine = "gemini"                  # "gemini" | "google" (Google's free speech endpoint, no key, no punctuation)
+google_language = ""               # google: one BCP-47 code, e.g. "en-GH", "ak"
+workers = 16                       # google: requests in flight
+model = "gemini-3.8-flash"         # gemini: GEMINI_API_KEY in the environment or a .env next to this file
 thinking = "low"
-concurrency = 64                   # requests in flight
+concurrency = 64                   # gemini: requests in flight
 audio = "segments"                 # "segments" (original) or "vocals" (Demucs output)
 language = "Twi (Akan)"
 code_switch = "English"            # "" if speakers use one language only

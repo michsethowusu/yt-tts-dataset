@@ -41,7 +41,8 @@ def report(cfg):
     print(f"transcribed        {sum(1 for r in txt if r['text']):6d}  {hours([r for r in txt if r['text']]):6.1f} h"
           f"  (empty {sum(r['text'] == '' for r in txt)}, failed {sum(r['text'] is None for r in txt)})")
     tin, tout = sum(r.get("in_tok", 0) for r in txt), sum(r.get("out_tok", 0) for r in txt)
-    print(f"gemini tokens      in {tin / 1e6:.2f}M  out+thinking {tout / 1e6:.2f}M")
+    if cfg["transcribe"]["engine"] == "gemini":
+        print(f"gemini tokens      in {tin / 1e6:.2f}M  out+thinking {tout / 1e6:.2f}M")
     print(f"with digits        {sum(1 for r in rows if r.get('digits')):6d}  {hours([r for r in rows if r.get('digits')]):6.1f} h")
     out = [r for r in rows if not b["min_cps"] <= r["cps"] <= b["max_cps"]]
     print(f"cps outside {b['min_cps']}-{b['max_cps']}  {len(out):6d}  {hours(out):6.1f} h")

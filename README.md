@@ -21,7 +21,7 @@ thresholds are all in the config.
 | **diarize** | `flac/<id>.flac`, `diar/<id>.rttm` | 48 kHz mono FLAC master; pyannote 3.1 speaker turns. Used **only** to keep segments single-speaker — no speaker IDs end up in the dataset. |
 | **segment** | `segs/<id>/*.flac`, `segs/<id>.jsonl` | Keeps each speaker's exclusive regions (other speakers' turns subtracted, so no overlap or crosstalk), cuts at Silero VAD pauses into 3–15 s segments. Pieces of one speaker are joined across short pauses only if nobody else speaks in the pause. |
 | **demucs** | `vocals/<id>/*.flac` | htdemucs vocals stem: removes music beds, jingles and background noise. Back to the master sample rate. |
-| **transcribe** | `text/<id>.jsonl` | Gemini, many requests in flight. Verbatim, keeps casing and punctuation (leave normalisation to your TTS framework), numbers written as words. |
+| **transcribe** | `text/<id>.jsonl` | `engine = "gemini"`: many requests in flight; verbatim, keeps casing and punctuation (leave normalisation to your TTS framework), numbers written as words. `engine = "google"`: Google's free speech endpoint in one language (`google_language`, e.g. `en-GH`), no key needed, no punctuation. |
 | **crosscheck** | `xcheck/<id>.jsonl` | omniASR CTC-1B transcribes the same audio. An LLM can hallucinate fluent text on music or unclear audio; a CTC model can't invent words that aren't there. CER between the two (letters only) flags bad transcripts. |
 | **build** | `dataset/{train,val}.jsonl`, `metadata_{train,val}.csv` | Drops segments above `max_cer`, with digits, or with implausible characters/second; holds out whole episodes for validation. |
 
@@ -49,7 +49,7 @@ python -m venv .venv-omni && .venv-omni/bin/pip install omnilingual-asr
 Keys go in the shell or a `.env` next to your config:
 
 ```
-GEMINI_API_KEY=...
+GEMINI_API_KEY=...  # only for transcribe.engine = "gemini"
 HF_TOKEN=...        # accept the terms of pyannote/speaker-diarization-3.1 and pyannote/segmentation-3.0 first
 ```
 
@@ -99,6 +99,9 @@ If some videos fail, `yt-tts-dataset download --skip-expand` retries just those.
 ## Notes
 
 - **Cost.** Gemini 3.8 Flash with low thinking used ≈ 200k input + 30k output tokens per hour of audio.
+- **Google engine.** Uses the unofficial free endpoint behind SpeechRecognition's `recognize_google`:
+  no key or cost, but one language per run, no punctuation, and it can rate-limit you (failed requests
+  are kept as `null`; `transcribe --retry-failed` re-requests them). Lower `workers` if many fail.
 - **Prompt.** Built from `transcribe.language`, `code_switch`, `orthography`, `context` and `example`;
   set `transcribe.prompt` to replace it entirely.
 - **CER threshold.** Measured on letters only (lowercased, no spaces or punctuation), so casing,

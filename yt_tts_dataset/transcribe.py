@@ -1,9 +1,13 @@
-"""Stage 5: Gemini transcription of every segment (async, many requests in flight).
+"""Stage 5: transcription of every segment, by Gemini or Google speech recognition (transcribe.engine).
 
+gemini  async, many requests in flight; verbatim, keeps casing and punctuation (TTS frameworks normalise).
+google  Google's free web speech endpoint (the SpeechRecognition package's recognize_google), one BCP-47
+        language code (transcribe.google_language, e.g. "en-GH"); --workers threads. Audio is sent as
+        16 kHz mono. No API key. Google returns no punctuation and few capitals.
 text/<id>.jsonl: the segment rows plus
-  text      verbatim transcript with Gemini's casing and punctuation (TTS frameworks normalise);
-            "" = no intelligible speech, null = API failed after all retries (rerun the stage to retry)
-  in_tok, out_tok   token usage (out includes thinking)
+  text      transcript; "" = no intelligible speech, null = request failed after all retries
+            (`transcribe --retry-failed` re-requests those)
+  in_tok, out_tok   Gemini token usage (out includes thinking); 0 for google
 Each episode is written once all its segments are back; the stage is resume-safe per episode.
 """
 import asyncio
@@ -68,6 +72,57 @@ async def gemini(session, sem, path, t, prompt, key):
     return None, 0, 0
 
 
+def google_one(path, language):
+    """Transcribe one file with Google; "" when nothing was recognised, None when every attempt failed."""
+    import numpy as np
+    import soundfile as sf
+    import speech_recognition as sr
+    import torch
+    import torchaudio
+
+    wav, rate = sf.read(path, dtype="float32", always_2d=True)
+    wav = torchaudio.functional.resample(torch.from_numpy(wav.mean(1)), rate, 16000).numpy()
+    audio = sr.AudioData((np.clip(wav, -1, 1) * 32767).astype(np.int16).tobytes(), 16000, 2)
+    rec = sr.Recognizer()
+    for attempt in range(6):
+        try:
+            return rec.recognize_google(audio, language=language).strip()
+        except sr.UnknownValueError:
+            return ""
+        except Exception:  # noqa: BLE001  network error / rate limit
+            time.sleep(2 * (attempt + 1) * (0.5 + random.random()))
+    return None
+
+
+def audio_paths(cfg, rows):
+    if cfg["transcribe"]["audio"] != "vocals":
+        return [r["audio"] for r in rows]
+    return [str(cfg.dir("vocals") / r["episode"] / Path(r["audio"]).name) for r in rows]
+
+
+def run_google(cfg, follow):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from .config import each_episode
+
+    t = cfg["transcribe"]
+    if not t["google_language"]:
+        raise SystemExit("set transcribe.google_language (a BCP-47 code such as \"en-GH\" or \"ak\")")
+    src_dir = cfg.dir("vocals" if t["audio"] == "vocals" else "segs")
+    seg_dir, out_dir = cfg.dir("segs"), cfg.dir("text")
+
+    def one(vid):
+        t0 = time.time()
+        rows = read_jsonl(seg_dir / f"{vid}.jsonl")
+        with ThreadPoolExecutor(t["workers"]) as pool:
+            texts = list(pool.map(lambda p: google_one(p, t["google_language"]), audio_paths(cfg, rows)))
+        write_jsonl(out_dir / f"{vid}.jsonl", [{**r, "text": x, "in_tok": 0, "out_tok": 0} for r, x in zip(rows, texts)])
+        print(f"{vid}: {len(rows)} segments, empty {sum(x == '' for x in texts)}, failed {sum(x is None for x in texts)} "
+              f"in {time.time() - t0:.0f}s", flush=True)
+
+    each_episode(cfg, lambda v: src_dir / f"{v}.jsonl", lambda v: out_dir / f"{v}.jsonl", one, follow)
+
+
 async def _run(cfg, follow):
     import aiohttp
 
@@ -109,11 +164,30 @@ async def _run(cfg, follow):
 
 
 def run(cfg, follow=False):
+    if cfg["transcribe"]["engine"] == "google":
+        return run_google(cfg, follow)
     asyncio.run(_run(cfg, follow))
 
 
 def retry_failed(cfg):
     """Re-request segments that came back null, in place."""
+    if cfg["transcribe"]["engine"] == "google":
+        from concurrent.futures import ThreadPoolExecutor
+
+        t = cfg["transcribe"]
+        for f in sorted(cfg.dir("text").glob("*.jsonl")):
+            rows = read_jsonl(f)
+            bad = [r for r in rows if r["text"] is None]
+            if not bad:
+                continue
+            with ThreadPoolExecutor(t["workers"]) as pool:
+                texts = list(pool.map(lambda p: google_one(p, t["google_language"]), audio_paths(cfg, bad)))
+            for r, x in zip(bad, texts):
+                r["text"] = x
+            write_jsonl(f, rows)
+            print(f"{f.stem}: retried {len(bad)}, still failed {sum(x is None for x in texts)}", flush=True)
+        return
+
     async def go():
         import aiohttp
 
@@ -125,8 +199,7 @@ def retry_failed(cfg):
                 bad = [r for r in rows if r["text"] is None]
                 if not bad:
                     continue
-                paths = [str(cfg.dir("vocals") / r["episode"] / Path(r["audio"]).name) if t["audio"] == "vocals"
-                         else r["audio"] for r in bad]
+                paths = audio_paths(cfg, bad)
                 res = await asyncio.gather(*(gemini(session, sem, p, t, prompt, key) for p in paths))
                 for r, (text, tin, tout) in zip(bad, res):
                     r.update(text=text, in_tok=tin, out_tok=tout)
