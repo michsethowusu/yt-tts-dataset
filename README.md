@@ -4,10 +4,11 @@ Turn a YouTube playlist (or any list of video URLs) into a text-to-speech datase
 single-speaker segments with verbatim transcripts, built for conversational and code-switched speech.
 
 ```
-playlist / URLs ──► download ──► diarize ──► segment ──► demucs ──► transcribe ──► crosscheck ──► build
-                    yt-split-    pyannote    single-     vocals     Gemini         omniASR CTC     filter +
-                    downloader   3.1         speaker     stem       (async)        second opinion  train/val
-                                             3–15 s
+playlist / URLs ──► download ──► diarize ──► segment ──► screen ──► transcribe ──► crosscheck ──► build
+                    yt-split-    pyannote    single-     PANNs      Gemini or      omniASR CTC     filter +
+                    downloader   3.1         speaker     non-speech Google ASR     second opinion  train/val
+                                             3–15 s      score      (optional:     (optional)
+                                                                    demucs first)
 ```
 
 Built at [Ghana NLP](https://ghananlp.org) for Twi/English podcasts, but the language, prompt and
@@ -20,10 +21,11 @@ thresholds are all in the config.
 | **download** | `videos.tsv`, `yt/videos/<id>.mp4` | Expands playlists, drops videos outside `min_minutes`/`max_minutes` (e.g. short excerpts of full episodes), downloads best audio only (opus, 48 kHz) with [yt-split-downloader](https://github.com/michsethowusu/yt-split-downloader). |
 | **diarize** | `flac/<id>.flac`, `diar/<id>.rttm` | 48 kHz mono FLAC master; pyannote 3.1 speaker turns. Used **only** to keep segments single-speaker — no speaker IDs end up in the dataset. |
 | **segment** | `segs/<id>/*.flac`, `segs/<id>.jsonl` | Keeps each speaker's exclusive regions (other speakers' turns subtracted, so no overlap or crosstalk), cuts at Silero VAD pauses into 3–15 s segments. Pieces of one speaker are joined across short pauses only if nobody else speaks in the pause. |
-| **demucs** | `vocals/<id>/*.flac` | htdemucs vocals stem: removes music beds, jingles and background noise. Back to the master sample rate. |
+| **screen** | `screen/<id>.jsonl` | [PANNs](https://github.com/qiuqiangkong/panns_inference) sound event detection (AudioSet's 527 classes, 10 ms frames) scores how much of anything other than speech each segment holds: music, laughter, applause, singing, crowd, noise. `build` drops segments above `max_nonspeech`. Fast, and it drops the segment instead of trying to clean it. On by default. |
+| **demucs** | `vocals/<id>/*.flac` | Optional (`demucs.enabled`). htdemucs vocals stem: removes music beds, jingles and background noise. Back to the master sample rate. Slow; for sources with music under the speech. |
 | **transcribe** | `text/<id>.jsonl` | `engine = "gemini"`: many requests in flight; verbatim, keeps casing and punctuation (leave normalisation to your TTS framework), numbers written as words. `engine = "google"`: Google's free speech endpoint in one language (`google_language`, e.g. `en-GH`), no key needed, no punctuation. |
 | **crosscheck** | `xcheck/<id>.jsonl` | omniASR CTC-1B transcribes the same audio. An LLM can hallucinate fluent text on music or unclear audio; a CTC model can't invent words that aren't there. CER between the two (letters only) flags bad transcripts. |
-| **build** | `dataset/{train,val}.jsonl`, `metadata_{train,val}.csv` | Drops segments above `max_cer`, with digits, or with implausible characters/second; holds out whole episodes for validation. |
+| **build** | `dataset/{train,val}.jsonl`, `metadata_{train,val}.csv` | Drops segments above `max_nonspeech` or `max_cer`, with digits, or with implausible characters/second; holds out whole episodes for validation. |
 
 Every stage is **resume-safe**: an episode's output file is written atomically when the episode is
 done, and each stage skips episodes that already have one. Kill anything, rerun, nothing is redone.
@@ -104,6 +106,9 @@ If some videos fail, `yt-tts-dataset download --skip-expand` retries just those.
   are kept as `null`; `transcribe --retry-failed` re-requests them). Lower `workers` if many fail.
 - **Prompt.** Built from `transcribe.language`, `code_switch`, `orthography`, `context` and `example`;
   set `transcribe.prompt` to replace it entirely.
+- **Non-speech threshold.** `nonspeech` is the highest score (0–1, averaged over `screen.smooth`
+  seconds) of any AudioSet class not in `screen.allow`; `nonspeech_label` names it. `report` shows
+  the hours kept at each threshold and which sounds the dropped segments had.
 - **CER threshold.** Measured on letters only (lowercased, no spaces or punctuation), so casing,
   punctuation and CTC's merged words don't count as disagreement. On Twi/English podcasts most segments
   agree within 15–30%; `max_cer = 50` keeps natural variation in spelling and drops the hallucinations.

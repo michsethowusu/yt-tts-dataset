@@ -1,7 +1,7 @@
 """Stage 7: filter and write the dataset.
 
 `report` prints how many hours each filter setting keeps (look before you drop);
-`build` applies [build] and writes dataset/{train,val}.jsonl plus LJSpeech-style metadata_{train,val}.csv
+`build` applies [build] (non-speech score, CER, digits, characters/second) and writes dataset/{train,val}.jsonl plus LJSpeech-style metadata_{train,val}.csv
 (audio|text). Audio is the Demucs vocals when demucs.enabled. Validation = whole held-out episodes.
 """
 import random
@@ -17,6 +17,9 @@ def load_rows(cfg):
         voc = {r["audio"]: r for f in sorted(cfg.dir("vocals").glob("*.jsonl")) for r in read_jsonl(f)}
         rows = [{**r, "vocals": voc[r["audio"]]["vocals"], "removed_db": voc[r["audio"]]["removed_db"]}
                 for r in rows if r["audio"] in voc]
+    if cfg["screen"]["enabled"]:
+        scr = {r["audio"]: r for f in sorted(cfg.dir("screen").glob("*.jsonl")) for r in read_jsonl(f)}
+        rows = [{**scr[r["audio"]], **r} for r in rows if r["audio"] in scr]
     for r in rows:
         r["cps"] = round(len(r["text"]) / r["dur"], 2)
     return rows
@@ -26,9 +29,10 @@ def hours(rows):
     return sum(r["dur"] for r in rows) / 3600
 
 
-def keep(r, b, max_cer=None):
+def keep(r, b, max_cer=None, max_nonspeech=None):
     max_cer = b["max_cer"] if max_cer is None else max_cer
-    return ((r.get("cer") is None or r["cer"] <= max_cer) and not (b["drop_digits"] and r.get("digits"))
+    max_ns = b["max_nonspeech"] if max_nonspeech is None else max_nonspeech
+    return ((r.get("cer") is None or r["cer"] <= max_cer) and (r.get("nonspeech") is None or r["nonspeech"] <= max_ns) and not (b["drop_digits"] and r.get("digits"))
             and b["min_cps"] <= r["cps"] <= b["max_cps"])
 
 
@@ -46,6 +50,14 @@ def report(cfg):
     print(f"with digits        {sum(1 for r in rows if r.get('digits')):6d}  {hours([r for r in rows if r.get('digits')]):6.1f} h")
     out = [r for r in rows if not b["min_cps"] <= r["cps"] <= b["max_cps"]]
     print(f"cps outside {b['min_cps']}-{b['max_cps']}  {len(out):6d}  {hours(out):6.1f} h")
+    if cfg["screen"]["enabled"]:
+        from collections import Counter
+        print("\nmax_nonspeech   kept (other filters applied)")
+        for m in (0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0):
+            k = [r for r in rows if keep(r, b, max_nonspeech=m)]
+            print(f"  {m:4.1f}   {len(k):6d} segments  {hours(k):6.1f} h" + ("   <- config" if m == b["max_nonspeech"] else ""))
+        drop = Counter(r["nonspeech_label"] for r in rows if r["nonspeech"] > b["max_nonspeech"])
+        print("  dropped at config, by sound: " + ", ".join(f"{k} {v}" for k, v in drop.most_common(12)))
     if cfg["crosscheck"]["enabled"]:
         print("\nmax_cer   kept (digits/cps filters applied)")
         for m in (20, 30, 40, 50, 60, 80, 100):
@@ -59,7 +71,8 @@ def run(cfg):
     eps = sorted({r["episode"] for r in rows})
     val_eps = set(random.Random(b["seed"]).sample(eps, min(b["val_episodes"], max(0, len(eps) - 1))))
     out = cfg.dir("dataset")
-    fields = ("audio", "text", "dur", "episode", "start", "end", "cer", "omni", "removed_db", "source_audio")
+    fields = ("audio", "text", "dur", "episode", "start", "end", "nonspeech", "nonspeech_label", "cer", "omni",
+              "removed_db", "source_audio")
     for split in ("train", "val"):
         part = [r for r in rows if (r["episode"] in val_eps) == (split == "val")]
         part = [{k: v for k, v in {**r, "source_audio": r["audio"], "audio": r.get("vocals", r["audio"])}.items()

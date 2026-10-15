@@ -6,11 +6,11 @@ import time
 
 from . import config
 
-STAGES = ["diarize", "segment", "demucs", "transcribe", "crosscheck"]
+STAGES = ["diarize", "segment", "screen", "demucs", "transcribe", "crosscheck"]
 
 
 def enabled(cfg, stage):
-    return {"demucs": cfg["demucs"]["enabled"], "crosscheck": cfg["crosscheck"]["enabled"]}.get(stage, True)
+    return {"screen": cfg["screen"]["enabled"], "demucs": cfg["demucs"]["enabled"], "crosscheck": cfg["crosscheck"]["enabled"]}.get(stage, True)
 
 
 def run_stage(cfg, stage, follow=False, **kw):
@@ -18,6 +18,8 @@ def run_stage(cfg, stage, follow=False, **kw):
         from .diarize import run
     elif stage == "segment":
         from .segment import run
+    elif stage == "screen":
+        from .screen import run
     elif stage == "demucs":
         from .demucs_vocals import run
     elif stage == "transcribe":

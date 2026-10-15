@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "yt-tts-dataset"
 version = "0.1.0"
-description = "YouTube playlist / video URLs -> single-speaker, transcribed TTS dataset (diarization, Demucs, Gemini or Google ASR, CTC cross-check)"
+description = "YouTube playlist / video URLs -> single-speaker, transcribed TTS dataset (diarization, non-speech screening, Demucs, Gemini or Google ASR, CTC cross-check)"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Mich-Seth Owusu" }]
@@ -22,6 +22,8 @@ dependencies = [
     "demucs==4.0.1",
     "aiohttp",
     "SpeechRecognition",
+    "panns-inference",
+    "librosa<0.11",
     "yt-dlp",
     "yt-split-downloader @ git+https://github.com/michsethowusu/yt-split-downloader",
 ]

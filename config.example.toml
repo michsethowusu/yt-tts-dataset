@@ -37,8 +37,15 @@ max_dur = 15.0
 join_gap = 0.6                     # join one speaker's VAD pieces across pauses shorter than this
 pad = 0.1
 
+[screen]
+enabled = true                     # PANNs non-speech score per segment (music, laughter, applause, noise...)
+batch = 64
+smooth = 0.3                       # seconds a sound must last to count
+allow = ["Speech", "Male speech, man speaking", "Female speech, woman speaking", "Child speech, kid speaking",
+         "Conversation", "Narration, monologue", "Silence", "Inside, small room"]   # AudioSet classes that don't count
+
 [demucs]
-enabled = true                     # vocals stem only (removes music beds / jingles)
+enabled = false                    # vocals stem (removes music beds / jingles); slow, for music-heavy sources
 model = "htdemucs"
 batch = 32
 
@@ -64,6 +71,7 @@ python = ""                        # python of a venv with omnilingual-asr (+ th
 batch = 32
 
 [build]
+max_nonspeech = 0.3                # drop segments whose non-speech score is above this; see `yt-tts-dataset report`
 max_cer = 50                       # % CER(Gemini -> omni) on letters only; see `yt-tts-dataset report`
 drop_digits = true                 # spoken form of digits is ambiguous
 min_cps = 4                        # characters per second outside this range = likely misaligned text

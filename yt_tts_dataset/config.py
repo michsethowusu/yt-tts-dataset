@@ -20,12 +20,16 @@ DEFAULTS = {
     "diarize": {"model": "pyannote/speaker-diarization-3.1"},
     "segment": {"sample_rate": 48000, "min_speaker_minutes": 3.0, "min_dur": 3.0, "max_dur": 15.0,
                 "join_gap": 0.6, "pad": 0.1},
-    "demucs": {"enabled": True, "model": "htdemucs", "batch": 32},
+    "screen": {"enabled": True, "batch": 64, "smooth": 0.3,
+               "allow": ["Speech", "Male speech, man speaking", "Female speech, woman speaking",
+                         "Child speech, kid speaking", "Conversation", "Narration, monologue",
+                         "Silence", "Inside, small room"]},
+    "demucs": {"enabled": False, "model": "htdemucs", "batch": 32},
     "transcribe": {"engine": "gemini", "google_language": "", "workers": 16, "model": "gemini-3.8-flash", "thinking": "low", "concurrency": 64, "audio": "segments",
                    "language": "", "code_switch": "", "orthography": "", "context": "a podcast",
                    "example": "", "prompt": ""},
     "crosscheck": {"enabled": True, "model": "omniASR_CTC_1B_v2", "python": "", "batch": 32},
-    "build": {"max_cer": 50, "drop_digits": True, "min_cps": 4, "max_cps": 30, "val_episodes": 2, "seed": 0},
+    "build": {"max_nonspeech": 0.3, "max_cer": 50, "drop_digits": True, "min_cps": 4, "max_cps": 30, "val_episodes": 2, "seed": 0},
 }
 
 
