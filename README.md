@@ -109,6 +109,10 @@ If some videos fail, `yt-tts-dataset download --skip-expand` retries just those.
 - **Non-speech threshold.** `nonspeech` is the highest score (0–1, averaged over `screen.smooth`
   seconds) of any AudioSet class not in `screen.allow`; `nonspeech_label` names it. `report` shows
   the hours kept at each threshold and which sounds the dropped segments had.
+- **Speaking-rate outliers.** Google's free endpoint sometimes returns only part of what was said.
+  `build` compares each segment's letters per second with the whole dataset (robust z-score of the log
+  rate) and drops those more than `rate_outlier_z` deviations away, too slow or too fast. On by default
+  (3) with the google engine; `report` shows what each setting removes.
 - **CER threshold.** Measured on letters only (lowercased, no spaces or punctuation), so casing,
   punctuation and CTC's merged words don't count as disagreement. On Twi/English podcasts most segments
   agree within 15–30%; `max_cer = 50` keeps natural variation in spelling and drops the hallucinations.

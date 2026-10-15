@@ -76,5 +76,7 @@ max_cer = 50                       # % CER(Gemini -> omni) on letters only; see 
 drop_digits = true                 # spoken form of digits is ambiguous
 min_cps = 4                        # characters per second outside this range = likely misaligned text
 max_cps = 30
+rate_outlier_z = "auto"            # drop segments whose speaking rate (letters/s) is this many robust SDs from the
+                                   # dataset's (ASR dropped or invented words); "auto" = 3 for google, off for gemini; 0 = off
 val_episodes = 2                   # whole episodes held out for validation
 seed = 0

@@ -1,12 +1,21 @@
 """Stage 7: filter and write the dataset.
 
 `report` prints how many hours each filter setting keeps (look before you drop);
-`build` applies [build] (non-speech score, CER, digits, characters/second) and writes dataset/{train,val}.jsonl plus LJSpeech-style metadata_{train,val}.csv
-(audio|text). Audio is the Demucs vocals when demucs.enabled. Validation = whole held-out episodes.
+`build` applies [build] (non-speech score, CER, digits, characters/second, speaking-rate outliers) and
+writes dataset/{train,val}.jsonl plus LJSpeech-style metadata_{train,val}.csv (audio|text). Audio is the
+Demucs vocals when demucs.enabled. Validation = whole held-out episodes.
+
+Speaking-rate outliers: an ASR that drops words (Google's free endpoint truncates long or unclear clips)
+leaves a transcript far too short for its audio, one that runs words together or hallucinates leaves one
+too long. Rate = letters per second (no spaces/punctuation, so Google's bare text and Gemini's punctuated
+text compare alike); rate_z = robust z-score of log(rate) against the whole dataset (median, 1.4826 x MAD).
+Segments with |rate_z| > build.rate_outlier_z are dropped; "auto" = 3 for the google engine, off for gemini.
 """
+import math
 import random
 
 from .config import read_jsonl, write_jsonl
+from .crosscheck import letters
 
 
 def load_rows(cfg):
@@ -22,22 +31,38 @@ def load_rows(cfg):
         rows = [{**scr[r["audio"]], **r} for r in rows if r["audio"] in scr]
     for r in rows:
         r["cps"] = round(len(r["text"]) / r["dur"], 2)
+        r["rate"] = len(letters(r["text"])) / r["dur"]
+    logs = sorted(math.log(r["rate"]) for r in rows if r["rate"] > 0)
+    if logs:
+        med = logs[len(logs) // 2]
+        mad = 1.4826 * sorted(abs(x - med) for x in logs)[len(logs) // 2] or 1.0
+        for r in rows:
+            r["rate_z"] = round((math.log(r["rate"]) - med) / mad, 2) if r["rate"] > 0 else -99.0
     return rows
+
+
+def rate_z_limit(cfg):
+    z = cfg["build"]["rate_outlier_z"]
+    if z == "auto":
+        return 3.0 if cfg["transcribe"]["engine"] == "google" else 0
+    return float(z or 0)
 
 
 def hours(rows):
     return sum(r["dur"] for r in rows) / 3600
 
 
-def keep(r, b, max_cer=None, max_nonspeech=None):
+def keep(r, b, max_cer=None, max_nonspeech=None, rate_z=None):
     max_cer = b["max_cer"] if max_cer is None else max_cer
     max_ns = b["max_nonspeech"] if max_nonspeech is None else max_nonspeech
-    return ((r.get("cer") is None or r["cer"] <= max_cer) and (r.get("nonspeech") is None or r["nonspeech"] <= max_ns) and not (b["drop_digits"] and r.get("digits"))
-            and b["min_cps"] <= r["cps"] <= b["max_cps"])
+    rate_z = b["_rate_z"] if rate_z is None else rate_z
+    return ((r.get("cer") is None or r["cer"] <= max_cer) and (r.get("nonspeech") is None or r["nonspeech"] <= max_ns)
+            and not (b["drop_digits"] and r.get("digits")) and b["min_cps"] <= r["cps"] <= b["max_cps"]
+            and (not rate_z or abs(r.get("rate_z", 0)) <= rate_z))
 
 
 def report(cfg):
-    b = cfg["build"]
+    b = {**cfg["build"], "_rate_z": rate_z_limit(cfg)}
     seg = [r for f in sorted(cfg.dir("segs").glob("*.jsonl")) for r in read_jsonl(f)]
     txt = [r for f in sorted(cfg.dir("text").glob("*.jsonl")) for r in read_jsonl(f)]
     rows = load_rows(cfg)
@@ -50,6 +75,16 @@ def report(cfg):
     print(f"with digits        {sum(1 for r in rows if r.get('digits')):6d}  {hours([r for r in rows if r.get('digits')]):6.1f} h")
     out = [r for r in rows if not b["min_cps"] <= r["cps"] <= b["max_cps"]]
     print(f"cps outside {b['min_cps']}-{b['max_cps']}  {len(out):6d}  {hours(out):6.1f} h")
+    if rows:
+        rs = sorted(r["rate"] for r in rows)
+        print(f"\nspeaking rate (letters/s): median {rs[len(rs) // 2]:.1f}, 1-99% {rs[len(rs) // 100]:.1f}-{rs[len(rs) * 99 // 100]:.1f}")
+        print("rate_outlier_z   too slow  too fast   kept (other filters applied)")
+        for z in (2.0, 2.5, 3.0, 3.5, 4.0, 0):
+            lo = [r for r in rows if z and r["rate_z"] < -z]
+            hi = [r for r in rows if z and r["rate_z"] > z]
+            k = [r for r in rows if keep(r, b, rate_z=z)]
+            print(f"  {z if z else 'off':>4}   {hours(lo):6.1f} h  {hours(hi):6.1f} h   {len(k):6d} segments  {hours(k):6.1f} h"
+                  + ("   <- config" if z == b["_rate_z"] else ""))
     if cfg["screen"]["enabled"]:
         from collections import Counter
         print("\nmax_nonspeech   kept (other filters applied)")
@@ -66,13 +101,13 @@ def report(cfg):
 
 
 def run(cfg):
-    b = cfg["build"]
+    b = {**cfg["build"], "_rate_z": rate_z_limit(cfg)}
     rows = [r for r in load_rows(cfg) if keep(r, b)]
     eps = sorted({r["episode"] for r in rows})
     val_eps = set(random.Random(b["seed"]).sample(eps, min(b["val_episodes"], max(0, len(eps) - 1))))
     out = cfg.dir("dataset")
-    fields = ("audio", "text", "dur", "episode", "start", "end", "nonspeech", "nonspeech_label", "cer", "omni",
-              "removed_db", "source_audio")
+    fields = ("audio", "text", "dur", "episode", "start", "end", "rate_z", "nonspeech", "nonspeech_label", "cer",
+              "omni", "removed_db", "source_audio")
     for split in ("train", "val"):
         part = [r for r in rows if (r["episode"] in val_eps) == (split == "val")]
         part = [{k: v for k, v in {**r, "source_audio": r["audio"], "audio": r.get("vocals", r["audio"])}.items()

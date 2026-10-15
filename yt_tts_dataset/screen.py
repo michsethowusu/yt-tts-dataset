@@ -10,10 +10,13 @@ screen/<id>.jsonl: audio plus
   speech           highest smoothed score of the "Speech" class
 Much faster than Demucs, and drops the segment instead of trying to clean it.
 """
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 
 from .config import each_episode, read_jsonl, write_jsonl
+
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")  # variable-length batches
 
 SR = 32000  # PANNs input rate
 HOP = 320   # 10 ms frames
@@ -53,6 +56,18 @@ def run(cfg, follow=False):
     seg_dir, out_dir = cfg.dir("segs"), cfg.dir("screen")
     resamplers = {}
 
+    def infer(x):
+        """Framewise scores; on CUDA out-of-memory (a shared GPU) halve the batch and retry."""
+        try:
+            return torch.from_numpy(model.inference(x))
+        except torch.OutOfMemoryError:
+            torch.cuda.empty_cache()
+            if len(x) == 1:
+                time.sleep(30)
+                return infer(x)
+            h = len(x) // 2
+            return torch.cat([infer(x[:h]), infer(x[h:])])
+
     def load(path):
         w, sr = sf.read(path, dtype="float32", always_2d=True)
         w = torch.from_numpy(w.mean(1)).cuda()
@@ -71,7 +86,7 @@ def run(cfg, follow=False):
                 wavs = list(pool.map(load, [r["audio"] for r in batch]))
                 n = max(len(w) for w in wavs)
                 x = torch.stack([F.pad(w, (0, n - len(w))) for w in wavs])
-                fw = torch.from_numpy(model.inference(x))  # (B, frames, 527)
+                fw = infer(x)  # (B, frames, 527)
                 fw = F.avg_pool1d(fw.transpose(1, 2), win, stride=1, padding=win // 2, count_include_pad=False).transpose(1, 2)
                 for r, w, f in zip(batch, wavs, fw):
                     f = f[: max(1, -(-len(w) // HOP))]  # drop padding frames

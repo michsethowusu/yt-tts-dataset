@@ -29,7 +29,7 @@ DEFAULTS = {
                    "language": "", "code_switch": "", "orthography": "", "context": "a podcast",
                    "example": "", "prompt": ""},
     "crosscheck": {"enabled": True, "model": "omniASR_CTC_1B_v2", "python": "", "batch": 32},
-    "build": {"max_nonspeech": 0.3, "max_cer": 50, "drop_digits": True, "min_cps": 4, "max_cps": 30, "val_episodes": 2, "seed": 0},
+    "build": {"max_nonspeech": 0.3, "max_cer": 50, "drop_digits": True, "min_cps": 4, "max_cps": 30, "rate_outlier_z": "auto", "val_episodes": 2, "seed": 0},
 }
 
 
