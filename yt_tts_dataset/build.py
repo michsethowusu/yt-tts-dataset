@@ -10,12 +10,44 @@ leaves a transcript far too short for its audio, one that runs words together or
 too long. Rate = letters per second (no spaces/punctuation, so Google's bare text and Gemini's punctuated
 text compare alike); rate_z = robust z-score of log(rate) against the whole dataset (median, 1.4826 x MAD).
 Segments with |rate_z| > build.rate_outlier_z are dropped; "auto" = 3 for the google engine, off for gemini.
+
+Digits: their spoken form is ambiguous, so drop_digits drops transcripts containing any. build.spell_digits =
+a num2words language code (e.g. "en") first writes them out as words: years ("1979", "1980s"), ordinals ("2nd"),
+percentages, $/£/€ amounts, decimals and plain numbers ("1,000"); anything left over is still dropped.
 """
 import math
 import random
+import re
 
 from .config import read_jsonl, write_jsonl
 from .crosscheck import letters
+
+NUMBER = re.compile(r"([$£€])?(\d[\d,]*(?:\.\d+)?)(st|nd|rd|th|s|%)?(?![\w])", re.I)
+CURRENCY = {"$": "USD", "£": "GBP", "€": "EUR"}
+
+
+def spell_digits(text, lang):
+    """Write the numbers in text out as words with num2words; the year/ordinal/plural reading comes from the form."""
+    from num2words import num2words
+
+    def word(m):
+        cur, num, suffix = m.group(1), m.group(2).replace(",", ""), (m.group(3) or "").lower()
+        try:
+            if cur:
+                w = num2words(float(num), lang=lang, to="currency", currency=CURRENCY[cur])
+            elif suffix in ("st", "nd", "rd", "th"):
+                w = num2words(int(num), lang=lang, to="ordinal")
+            elif "." not in num and len(num) == 4 and 1100 <= int(num) <= 2099:
+                w = num2words(int(num), lang=lang, to="year")
+                if suffix == "s":  # 1980s -> nineteen eighties
+                    w = w[:-1] + "ies" if w.endswith("y") else w + "s"
+            else:
+                w = num2words(float(num) if "." in num else int(num), lang=lang)
+                w += {"%": " percent", "s": "s"}.get(suffix, "")
+        except (ValueError, NotImplementedError, OverflowError):
+            return m.group(0)
+        return w.replace(",", "")
+    return NUMBER.sub(word, text)
 
 
 def load_rows(cfg):
@@ -29,9 +61,13 @@ def load_rows(cfg):
     if cfg["screen"]["enabled"]:
         scr = {r["audio"]: r for f in sorted(cfg.dir("screen").glob("*.jsonl")) for r in read_jsonl(f)}
         rows = [{**scr[r["audio"]], **r} for r in rows if r["audio"] in scr]
+    lang = cfg["build"]["spell_digits"]
     for r in rows:
+        if lang and re.search(r"\d", r["text"]):
+            r["text"] = spell_digits(r["text"], lang)
         r["cps"] = round(len(r["text"]) / r["dur"], 2)
         r["rate"] = len(letters(r["text"])) / r["dur"]
+        r["digits"] = bool(re.search(r"\d", r["text"]))  # spoken form is ambiguous ("2" = two / to / second)
     logs = sorted(math.log(r["rate"]) for r in rows if r["rate"] > 0)
     if logs:
         med = logs[len(logs) // 2]

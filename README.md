@@ -174,7 +174,8 @@ goes into the dataset.
 | `rate_outlier_z` | `"auto"` | segments whose speaking rate is an outlier (below); `"auto"` = 3 for google, off for gemini; `0` = off |
 | `min_cps`, `max_cps` | `4`, `30` | characters per second outside this fixed range |
 | `max_cer` | `50` | disagreement with the crosscheck ASR above this % (only with `crosscheck.enabled`) |
-| `drop_digits` | `true` | transcripts containing digits |
+| `drop_digits` | `true` | transcripts containing digits (their spoken form is ambiguous) |
+| `spell_digits` | `""` | (not a filter) a [num2words](https://github.com/savoirfairelinux/num2words) language code, e.g. `"en"`: writes numbers out as words first (years, ordinals, %, $/£/€, decimals), so only leftovers are dropped |
 | `val_episodes` | `2` | (not a filter) whole episodes held out for validation |
 
 Empty transcripts are always dropped. Run `yt-tts-dataset report` before `build`: it prints the

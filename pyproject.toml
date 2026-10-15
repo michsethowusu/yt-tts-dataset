@@ -24,6 +24,7 @@ dependencies = [
     "SpeechRecognition",
     "panns-inference",
     "sherpa-onnx",
+    "num2words",
     "librosa<0.11",
     "yt-dlp",
     "yt-split-downloader @ git+https://github.com/michsethowusu/yt-split-downloader",
