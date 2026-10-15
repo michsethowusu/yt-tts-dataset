@@ -19,7 +19,7 @@ thresholds are all in the config.
 | Stage | Output (`data/…`) | Why |
 |---|---|---|
 | **download** | `videos.tsv`, `yt/videos/<id>.mp4` | Expands playlists, drops videos outside `min_minutes`/`max_minutes` (e.g. short excerpts of full episodes), downloads best audio only (opus, 48 kHz) with [yt-split-downloader](https://github.com/michsethowusu/yt-split-downloader). |
-| **diarize** | `flac/<id>.flac`, `diar/<id>.rttm` | 48 kHz mono FLAC master; pyannote 3.1 speaker turns. Used **only** to keep segments single-speaker — no speaker IDs end up in the dataset. |
+| **diarize** | `flac/<id>.flac`, `diar/<id>.rttm` | 48 kHz mono FLAC master; speaker turns from pyannote 3.1 (default), NVIDIA Sortformer (GPU, much faster) or sherpa-onnx (CPU). Used **only** to keep segments single-speaker — no speaker IDs end up in the dataset. |
 | **segment** | `segs/<id>/*.flac`, `segs/<id>.jsonl` | Keeps each speaker's exclusive regions (other speakers' turns subtracted, so no overlap or crosstalk), cuts at Silero VAD pauses into 3–15 s segments. Pieces of one speaker are joined across short pauses only if nobody else speaks in the pause. |
 | **screen** | `screen/<id>.jsonl` | [PANNs](https://github.com/qiuqiangkong/panns_inference) sound event detection (AudioSet's 527 classes, 10 ms frames) scores how much of anything other than speech each segment holds: music, laughter, applause, singing, crowd, noise. `build` drops segments above `max_nonspeech`. Fast, and it drops the segment instead of trying to clean it. On by default. |
 | **demucs** | `vocals/<id>/*.flac` | Optional (`demucs.enabled`). htdemucs vocals stem: removes music beds, jingles and background noise. Back to the master sample rate. Slow; for sources with music under the speech. |
@@ -91,6 +91,32 @@ If some videos fail, `yt-tts-dataset download --skip-expand` retries just those.
 ## Options
 
 All in `config.toml`; `config.example.toml` lists every key with its default.
+
+### Diarization: pyannote, Sortformer or sherpa-onnx
+
+| | `engine = "pyannote"` (default) | `engine = "sortformer"` | `engine = "sherpa"` |
+|---|---|---|---|
+| Model | speaker-diarization-3.1 | NVIDIA Streaming Sortformer 4spk v2 | pyannote segmentation-3.0 + WeSpeaker, ONNX |
+| Runs on | GPU, clustering on CPU | GPU only, end to end | CPU (or CUDA build) |
+| Speed (H200, busy CPU) | 10–17× realtime per process | ~170× realtime | ~11× |
+| Limits | HF token, gated model | ≤ 4 speakers; NeMo install | tune `cluster_threshold` |
+
+Measured on a 101-minute two-person interview: Sortformer found the same host and guest as pyannote
+(69 vs 76 min and 19 vs 19 min) at 17% DER against it, mostly a little less speech marked. Since
+diarization only decides which regions are single-speaker, that is enough; use pyannote where you
+want its accuracy and the CPU is free.
+
+NeMo pins many packages, so install it in its own venv and point `diarize.python` at it:
+
+```bash
+python -m venv .venv-nemo && .venv-nemo/bin/pip install "nemo_toolkit[asr]" soundfile
+```
+
+```toml
+[diarize]
+engine = "sortformer"
+python = ".venv-nemo/bin/python"
+```
 
 ### Transcription: Gemini or Google
 

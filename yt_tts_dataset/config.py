@@ -17,7 +17,11 @@ DEFAULTS = {
     "download": {"backend": "local", "format": "ba[protocol=https][acodec=opus]/ba[protocol=https]", "workers": 5,
                  "connections": 16, "cookies": "", "host": "", "remote_dir": "", "remote_python": "python3",
                  "stall_minutes": 30, "audio_dir": "", "pull": True},
-    "diarize": {"model": "pyannote/speaker-diarization-3.1"},
+    "diarize": {"engine": "pyannote", "provider": "cpu", "threads": 4, "cluster_threshold": 0.5,
+                "embedding_model": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/"
+                                   "wespeaker_en_voxceleb_resnet34.onnx",
+                "sortformer_model": "nvidia/diar_streaming_sortformer_4spk-v2", "python": "",
+                "model": "pyannote/speaker-diarization-3.1"},
     "segment": {"sample_rate": 48000, "min_speaker_minutes": 3.0, "min_dur": 3.0, "max_dur": 15.0,
                 "join_gap": 0.6, "pad": 0.1},
     "screen": {"enabled": True, "batch": 64, "smooth": 0.3,
@@ -48,6 +52,11 @@ class Config:
     def resolve(self, p):
         p = Path(os.path.expanduser(p))
         return p if p.is_absolute() else (self.base / p).resolve()
+
+    def executable(self, p):
+        """A venv's python: relative to this file, symlinks NOT followed (they point outside the venv)."""
+        p = Path(os.path.expanduser(p))
+        return str(p if p.is_absolute() else self.base / p)
 
     @property
     def data(self):

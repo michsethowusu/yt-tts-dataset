@@ -23,6 +23,7 @@ dependencies = [
     "aiohttp",
     "SpeechRecognition",
     "panns-inference",
+    "sherpa-onnx",
     "librosa<0.11",
     "yt-dlp",
     "yt-split-downloader @ git+https://github.com/michsethowusu/yt-split-downloader",

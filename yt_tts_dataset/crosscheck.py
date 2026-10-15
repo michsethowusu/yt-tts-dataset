@@ -40,7 +40,7 @@ def cer(ref, hyp):
 
 def run(cfg, follow=False):
     c = cfg["crosscheck"]
-    py = c["python"] and str(cfg.resolve(c["python"]))
+    py = c["python"] and cfg.executable(c["python"])
     # compare unresolved: venv pythons are symlinks to the same interpreter
     if py and os.path.abspath(py) != os.path.abspath(sys.executable) and not os.environ.get("YTTD_CHILD"):
         env = {**os.environ, "YTTD_CHILD": "1",

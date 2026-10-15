@@ -27,7 +27,13 @@ audio_dir = ""                     # where the other stages find <id>.*; default
                                    # (ssh, stages run on the server: set to <remote_dir>/videos)
 
 [diarize]
-model = "pyannote/speaker-diarization-3.1"   # gated: accept the terms on HF, set HF_TOKEN
+engine = "pyannote"                # "pyannote" | "sortformer" (fast, GPU, NeMo) | "sherpa" (ONNX, CPU)
+model = "pyannote/speaker-diarization-3.1"   # pyannote: gated, accept the terms on HF and set HF_TOKEN
+sortformer_model = "nvidia/diar_streaming_sortformer_4spk-v2"   # sortformer: up to 4 speakers
+python = ""                        # python of a venv with the engine installed (e.g. NeMo); "" = current one
+provider = "cpu"                   # sherpa: "cpu" or "cuda"
+threads = 4                        # sherpa: ONNX threads
+cluster_threshold = 0.5            # sherpa: higher = fewer speakers
 
 [segment]
 sample_rate = 48000                # sample rate of masters and segments
