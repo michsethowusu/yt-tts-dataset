@@ -4,7 +4,8 @@ download best audio with yt-split-downloader (github.com/michsethowusu/yt-split-
 yt-split-downloader resolves the media URLs on this machine (a trusted IP YouTube serves) and downloads
 the bytes where the backend says:
   local   on this machine                         -> audio in <data_dir>/yt/videos
-  ssh     on a server (e.g. a GPU box whose datacenter IP YouTube blocks), pulled back here too;
+  ssh     on a server (e.g. a GPU box whose datacenter IP YouTube blocks), pulled back here too unless
+          download.pull = false;
           run the other stages on the server with download.audio_dir = <remote_dir>/videos
   modal   on Modal, fetched back here
 This stage keeps resolving until every video has arrived, or nothing new has arrived for stall_minutes.
@@ -96,9 +97,12 @@ def run(cfg, skip_expand=False):
             if done == want or time.time() - last_t > 60 * cfg["download"]["stall_minutes"]:
                 break
             time.sleep(yc.general.poll_interval)
-        if yc.backend.type == "ssh":
+        if yc.backend.type == "ssh" and cfg["download"]["pull"]:
             backend.pull_results(layout)
-    missing = [v for v in ids if not audio_path(cfg, v)]
+    if yc.backend.type == "ssh" and not cfg["download"]["pull"]:  # files stay on the server
+        missing = [v for v in ids if v not in done]
+    else:
+        missing = [v for v in ids if not audio_path(cfg, v)]
     if missing:  # set aside so later stages don't wait for them
         print(f"{len(missing)} not downloaded (rerun `download --skip-expand` to retry): {' '.join(missing)}")
         lines = tsv.read_text().splitlines(keepends=True)

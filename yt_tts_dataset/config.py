@@ -16,7 +16,7 @@ DEFAULTS = {
     "source": {"urls": [], "urls_file": "", "min_minutes": 0, "max_minutes": 0},
     "download": {"backend": "local", "format": "ba[protocol=https][acodec=opus]/ba[protocol=https]", "workers": 5,
                  "connections": 16, "cookies": "", "host": "", "remote_dir": "", "remote_python": "python3",
-                 "stall_minutes": 30, "audio_dir": ""},
+                 "stall_minutes": 30, "audio_dir": "", "pull": True},
     "diarize": {"model": "pyannote/speaker-diarization-3.1"},
     "segment": {"sample_rate": 48000, "min_speaker_minutes": 3.0, "min_dur": 3.0, "max_dur": 15.0,
                 "join_gap": 0.6, "pad": 0.1},

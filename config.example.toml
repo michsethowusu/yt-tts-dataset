@@ -21,6 +21,7 @@ cookies = ""                       # cookies.txt, if some videos need sign-in
 host = ""                          # ssh: alias or user@host
 remote_dir = ""                    # ssh: download folder on the server (videos land in <remote_dir>/videos)
 remote_python = "python3"
+pull = true                        # ssh: also copy the downloads back here (false = leave them on the server)
 stall_minutes = 30                 # stop waiting when nothing new arrives for this long
 audio_dir = ""                     # where the other stages find <id>.*; default <data_dir>/yt/videos
                                    # (ssh, stages run on the server: set to <remote_dir>/videos)
