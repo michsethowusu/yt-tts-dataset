@@ -82,6 +82,8 @@ def run(cfg, skip_expand=False):
         ids = expand(cfg)
     yc = ytsd_config(cfg, ids)
     backend = get_backend(yc)
+    if yc.backend.type == "ssh" and not cfg["download"]["pull"]:
+        backend.pull_results = lambda layout: None  # the resolver loop pulls after every pass otherwise
     backend.prepare()
     layout = Layout(yc.project_dir)
     if yc.backend.type == "modal":
