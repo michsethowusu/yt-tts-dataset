@@ -9,6 +9,8 @@ screen/<id>.jsonl: audio plus
   nonspeech_label  the class that scored it, e.g. "Laughter", "Music"
   speech           highest smoothed score of the "Speech" class
 Much faster than Demucs, and drops the segment instead of trying to clean it.
+screen.audio = "vocals" scores the Demucs vocals instead (run demucs first): music the separation
+removed no longer counts, so only segments where music or noise survived are dropped.
 """
 import os
 import time
@@ -53,7 +55,8 @@ def run(cfg, follow=False):
     other[allow] = False
     speech = labels.index("Speech")
     win = max(1, round(c["smooth"] * SR / HOP))
-    seg_dir, out_dir = cfg.dir("segs"), cfg.dir("screen")
+    vocals = c["audio"] == "vocals"
+    seg_dir, out_dir = cfg.dir("vocals" if vocals else "segs"), cfg.dir("screen")
     resamplers = {}
 
     def infer(x):
@@ -80,10 +83,12 @@ def run(cfg, follow=False):
     def one(vid):
         t0 = time.time()
         rows = read_jsonl(seg_dir / f"{vid}.jsonl")
+        if vocals:  # vocals rows carry no duration; key results by the segment, load the vocals file
+            rows = [{"audio": r["audio"], "path": r["vocals"], "dur": sf.info(r["vocals"]).duration} for r in rows]
         res = {}
         with ThreadPoolExecutor(8) as pool:
             for batch in batches_by_length(rows, c["batch"], c["batch"] * 8):
-                wavs = list(pool.map(load, [r["audio"] for r in batch]))
+                wavs = list(pool.map(load, [r.get("path", r["audio"]) for r in batch]))
                 n = max(len(w) for w in wavs)
                 x = torch.stack([F.pad(w, (0, n - len(w))) for w in wavs])
                 fw = infer(x)  # (B, frames, 527)

@@ -173,8 +173,18 @@ enabled = false
 
 `allow` holds the [AudioSet class names](https://github.com/qiuqiangkong/audioset_tagging_cnn/blob/master/metadata/class_labels_indices.csv)
 that don't count as non-speech; everything else does (laughter, music, applause, singing, crowd,
-animals, noise…). Both can be on: the screen runs on the original segments, Demucs output is what
-goes into the dataset.
+animals, noise…). Both can be on: Demucs output is what goes into the dataset, and the screen runs on
+the original segments by default. With music under most of the speech, set `screen.audio = "vocals"`:
+the screen then scores the Demucs output (it runs after `demucs`), so music Demucs removed no longer
+counts and `build` drops only segments where music or noise survived.
+
+```toml
+[screen]
+audio = "vocals"
+
+[demucs]
+enabled = true
+```
 
 ### Filters in `build`
 

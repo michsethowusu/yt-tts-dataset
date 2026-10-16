@@ -34,6 +34,9 @@ def run_all(cfg, args):
         from .download import run as download
         download(cfg)
     stages = [s for s in STAGES if enabled(cfg, s)]
+    if cfg["screen"]["audio"] == "vocals" and "demucs" in stages and "screen" in stages:
+        stages.remove("screen")  # it scores the Demucs output
+        stages.insert(stages.index("demucs") + 1, "screen")
     if args.sequential:
         for s in stages:
             print(f"== {s}", flush=True)

@@ -46,6 +46,7 @@ pad = 0.1
 
 [screen]
 enabled = true                     # PANNs non-speech score per segment (music, laughter, applause, noise...)
+audio = "segments"                 # "vocals" = score the Demucs output (needs demucs.enabled): drops only what Demucs left
 batch = 64
 smooth = 0.3                       # seconds a sound must last to count
 allow = ["Speech", "Male speech, man speaking", "Female speech, woman speaking", "Child speech, kid speaking",
