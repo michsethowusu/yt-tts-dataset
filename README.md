@@ -93,7 +93,7 @@ If some videos fail, `yt-tts-dataset download --skip-expand` retries just those.
 
 All in `config.toml`; `config.example.toml` lists every key with its default.
 
-### Diarization: pyannote, Sortformer or sherpa-onnx
+### Diarization: pyannote, Sortformer, sherpa-onnx or none
 
 | | `engine = "pyannote"` (default) | `engine = "sortformer"` | `engine = "sherpa"` |
 |---|---|---|---|
@@ -117,6 +117,16 @@ python -m venv .venv-nemo && .venv-nemo/bin/pip install "nemo_toolkit[asr]" soun
 [diarize]
 engine = "sortformer"
 python = ".venv-nemo/bin/python"
+```
+
+**One speaker throughout** (a solo channel, a lecture series): skip diarization with `engine = "none"`.
+Each episode becomes one speaker turn covering the whole file, so `segment` cuts at VAD pauses only;
+it takes seconds and needs no GPU or token. Other voices (an intro, a quoted clip) are not removed,
+and episodes shorter than `segment.min_speaker_minutes` are skipped.
+
+```toml
+[diarize]
+engine = "none"
 ```
 
 ### Transcription: Gemini or Google

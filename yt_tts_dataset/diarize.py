@@ -11,6 +11,9 @@ are carried into the dataset. Engines (diarize.engine):
   sherpa      sherpa-onnx (github.com/k2-fsa/sherpa-onnx): pyannote segmentation-3.0 + WeSpeaker ResNet34
               embeddings + fast clustering, ONNX, CPU (or provider = "cuda" with its CUDA wheel). No token;
               models downloaded once. Tune cluster_threshold: the default over-splits speakers.
+  none        no diarization, for sources where one person speaks throughout (a solo channel): each
+              episode is one speaker turn covering the whole file, so segment cuts at VAD pauses only.
+              Nothing to load, no GPU. Other voices (an intro, a clip) are not removed.
 Shard across processes with --shard i --nshards n.
 """
 import os
@@ -135,6 +138,15 @@ def pyannote_engine(d):
     return diarize
 
 
+def none_engine(d):
+    import soundfile as sf
+
+    def diarize(flac):
+        secs = sf.info(str(flac)).duration
+        return [(0.0, secs, "SPEAKER_00")], secs
+    return diarize
+
+
 def run(cfg, follow=False, shard=0, nshards=1):
     d = cfg["diarize"]
     py = d["python"] and cfg.executable(d["python"])
@@ -145,7 +157,8 @@ def run(cfg, follow=False, shard=0, nshards=1):
                "--nshards", str(nshards)] + (["--follow"] if follow else [])
         os.execve(py, cmd, env)  # replace this process, so stopping it stops the engine too
 
-    engines = {"sherpa": sherpa_engine, "sortformer": sortformer_engine, "pyannote": pyannote_engine}
+    engines = {"sherpa": sherpa_engine, "sortformer": sortformer_engine, "pyannote": pyannote_engine,
+               "none": none_engine}
     if d["engine"] not in engines:
         raise SystemExit(f"diarize.engine must be one of {sorted(engines)}")
     diarize = engines[d["engine"]](d)
