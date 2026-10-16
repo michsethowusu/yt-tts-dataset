@@ -41,6 +41,7 @@ min_speaker_minutes = 3.0          # labels with less total speech are treated a
 min_dur = 3.0
 max_dur = 15.0
 join_gap = 0.6                     # join one speaker's VAD pieces across pauses shorter than this
+min_silence_ms = [150, 100, 50]    # pause = silence >= first value; VAD pieces > max_dur are split at the shorter ones
 pad = 0.1
 
 [screen]

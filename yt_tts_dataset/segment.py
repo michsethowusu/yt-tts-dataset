@@ -3,10 +3,14 @@
   1. main speakers = labels with >= min_speaker_minutes (drops pyannote's tiny spurious clusters)
   2. exclusive regions = a main speaker's turns minus every other label's turns (no overlap/crosstalk)
   3. Silero VAD speech inside those regions; one speaker's pieces are joined across pauses < join_gap
-     (only if nobody else speaks in the pause) up to max_dur, so every cut lands in a pause
-  4. min_dur..max_dur segments (+pad each side) written as mono 16-bit FLAC: segs/<id>/<id>_<n>.flac
+     (only if nobody else speaks in the pause) up to max_dur, so every cut lands in a pause.
+     Pauses = silences of at least min_silence_ms[0]; a VAD piece still longer than max_dur (a fast,
+     fluent speaker) is split at the shorter silences of the next min_silence_ms levels.
+  4. min_dur..max_dur segments (+pad each side, never past the middle of the pause into the next
+     speech) written as mono 16-bit FLAC: segs/<id>/<id>_<n>.flac
 Writes segs/<id>.jsonl: audio, episode, start, end, dur.
 """
+import bisect
 import time
 
 from .config import each_episode, write_jsonl
@@ -25,6 +29,18 @@ def subtract(a, b):
             cur = max(cur, be)
         if cur < e:
             out.append((cur, e))
+    return out
+
+
+def refine(levels, max_dur):
+    """Coarsest VAD pieces, with each piece longer than max_dur replaced by the finer level's pieces in it."""
+    out = []
+    for s, e in levels[0]:
+        if e - s <= max_dur or len(levels) == 1:
+            out.append((s, e))
+        else:
+            out += refine([[(max(s, fs), min(e, fe)) for fs, fe in lv if fe > s and fs < e] for lv in levels[1:]],
+                          max_dur)
     return out
 
 
@@ -67,14 +83,20 @@ def run(cfg, follow=False):
         t0 = time.time()
         a, sr = sf.read(str(flac_dir / f"{vid}.flac"), dtype="float32")
         a16 = torchaudio.functional.resample(torch.from_numpy(a), sr, 16000)
-        speech = [(t["start"] / 16000, t["end"] / 16000) for t in
-                  get_speech_timestamps(a16, vad, sampling_rate=16000, min_silence_duration_ms=150, speech_pad_ms=0)]
+        levels = [[(t["start"] / 16000, t["end"] / 16000) for t in
+                   get_speech_timestamps(a16, vad, sampling_rate=16000, min_silence_duration_ms=ms, speech_pad_ms=0)]
+                  for ms in c["min_silence_ms"]]
+        speech = refine(levels, c["max_dur"])
+        ends, starts = [e for _, e in speech], [s for s, _ in speech]
         total = len(a) / sr
         out = seg_dir / vid
         out.mkdir(exist_ok=True)
         rows = []
         for n, (s, e) in enumerate(spans(diar_dir / f"{vid}.rttm", speech, c)):
-            st, en = max(0.0, s - c["pad"]), min(total, e + c["pad"])
+            i, j = bisect.bisect_right(ends, s), bisect.bisect_left(starts, e)  # neighbouring speech
+            prev_end, next_start = ends[i - 1] if i else 0.0, starts[j] if j < len(starts) else total
+            st = max(0.0, s - c["pad"], (prev_end + s) / 2)
+            en = min(total, e + c["pad"], (e + next_start) / 2)
             path = out / f"{vid}_{n:04d}.flac"
             sf.write(str(path), a[int(st * sr): int(en * sr)], sr, format="FLAC", subtype="PCM_16")
             rows.append({"audio": str(path), "episode": vid, "start": round(st, 3), "end": round(en, 3),

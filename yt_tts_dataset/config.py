@@ -23,6 +23,7 @@ DEFAULTS = {
                 "sortformer_model": "nvidia/diar_streaming_sortformer_4spk-v2", "python": "",
                 "model": "pyannote/speaker-diarization-3.1"},
     "segment": {"sample_rate": 48000, "min_speaker_minutes": 3.0, "min_dur": 3.0, "max_dur": 15.0,
+                "min_silence_ms": [150, 100, 50],
                 "join_gap": 0.6, "pad": 0.1},
     "screen": {"enabled": True, "batch": 64, "smooth": 0.3,
                "allow": ["Speech", "Male speech, man speaking", "Female speech, woman speaking",
