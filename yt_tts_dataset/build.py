@@ -25,7 +25,7 @@ import re
 from .config import read_jsonl, write_jsonl
 from .crosscheck import letters
 
-NUMBER = re.compile(r"([$£€])?(\d[\d,]*(?:\.\d+)?)(st|nd|rd|th|s|%)?(?![\w])", re.I)
+NUMBER = re.compile(r"([$£€])?(\d+(?:,\d{3})*(?:\.\d+)?)(st|nd|rd|th|s|%)?(?![\w])", re.I)
 CURRENCY = {"$": ("dollar", "dollars", "USD"), "£": ("pound", "pounds", "GBP"), "€": ("euro", "euros", "EUR")}
 
 
