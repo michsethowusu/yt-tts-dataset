@@ -14,8 +14,8 @@ Segments with |rate_z| > build.rate_outlier_z are dropped; "auto" = 3 for the go
 Digits: their spoken form is ambiguous, so drop_digits drops transcripts containing any. build.spell_digits =
 a num2words language code (e.g. "en") first writes them out as words: years ("1979", "1980s"), ordinals ("2nd"),
 percentages, $/£/€ amounts, decimals and plain numbers ("1,000"); anything left over is still dropped.
-English follows Ghanaian usage: 1979 = "nineteen seventy-nine", but 2000-2099 = "two thousand and twenty-one",
-and "and" after hundreds ("one hundred and five"). Use "en" for numbers inside other languages too: an
+Years read as years: 1979 = "nineteen seventy-nine", 2021 = "twenty twenty-one" (2000-2009 = "two thousand
+and nine"); "and" after hundreds ("one hundred and five"). Use "en" for numbers inside other languages too: an
 ASR writes digits for numbers said in English (one said in Twi comes back as Twi words).
 """
 import math
@@ -42,10 +42,6 @@ def spell_digits(text, lang):
                 w = num2words(float(num), lang=lang, to="currency", currency=CURRENCY[cur][2])
             elif suffix in ("st", "nd", "rd", "th"):
                 w = num2words(int(num), lang=lang, to="ordinal")
-            elif "." not in num and len(num) == 4 and 2000 <= int(num) <= 2099 and lang.startswith("en") and (
-                    suffix != "s" or num == "2000"):  # (the 2010s keep the year reading: twenty tens)
-                n = int(num) - 2000  # 2021 -> two thousand and twenty-one, as said in Ghana (not "twenty twenty-one")
-                w = "two thousand" + (f" and {num2words(n, lang=lang)}" if n else "") + ("s" if suffix == "s" else "")
             elif "." not in num and len(num) == 4 and 1100 <= int(num) <= 2099:
                 w = num2words(int(num), lang=lang, to="year")
                 if suffix == "s":  # 1980s -> nineteen eighties
