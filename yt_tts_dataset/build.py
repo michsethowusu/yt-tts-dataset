@@ -14,6 +14,9 @@ Segments with |rate_z| > build.rate_outlier_z are dropped; "auto" = 3 for the go
 Digits: their spoken form is ambiguous, so drop_digits drops transcripts containing any. build.spell_digits =
 a num2words language code (e.g. "en") first writes them out as words: years ("1979", "1980s"), ordinals ("2nd"),
 percentages, $/£/€ amounts, decimals and plain numbers ("1,000"); anything left over is still dropped.
+English follows Ghanaian usage: 1979 = "nineteen seventy-nine", but 2000-2099 = "two thousand and twenty-one",
+and "and" after hundreds ("one hundred and five"). Use "en" for numbers inside other languages too: an
+ASR writes digits for numbers said in English (one said in Twi comes back as Twi words).
 """
 import math
 import random
@@ -23,7 +26,7 @@ from .config import read_jsonl, write_jsonl
 from .crosscheck import letters
 
 NUMBER = re.compile(r"([$£€])?(\d[\d,]*(?:\.\d+)?)(st|nd|rd|th|s|%)?(?![\w])", re.I)
-CURRENCY = {"$": "USD", "£": "GBP", "€": "EUR"}
+CURRENCY = {"$": ("dollar", "dollars", "USD"), "£": ("pound", "pounds", "GBP"), "€": ("euro", "euros", "EUR")}
 
 
 def spell_digits(text, lang):
@@ -33,10 +36,16 @@ def spell_digits(text, lang):
     def word(m):
         cur, num, suffix = m.group(1), m.group(2).replace(",", ""), (m.group(3) or "").lower()
         try:
-            if cur:
-                w = num2words(float(num), lang=lang, to="currency", currency=CURRENCY[cur])
+            if cur and "." not in num:  # $5 -> five dollars (not "five dollars, zero cents")
+                w = num2words(int(num), lang=lang) + " " + CURRENCY[cur][int(num) != 1]
+            elif cur:
+                w = num2words(float(num), lang=lang, to="currency", currency=CURRENCY[cur][2])
             elif suffix in ("st", "nd", "rd", "th"):
                 w = num2words(int(num), lang=lang, to="ordinal")
+            elif "." not in num and len(num) == 4 and 2000 <= int(num) <= 2099 and lang.startswith("en") and (
+                    suffix != "s" or num == "2000"):  # (the 2010s keep the year reading: twenty tens)
+                n = int(num) - 2000  # 2021 -> two thousand and twenty-one, as said in Ghana (not "twenty twenty-one")
+                w = "two thousand" + (f" and {num2words(n, lang=lang)}" if n else "") + ("s" if suffix == "s" else "")
             elif "." not in num and len(num) == 4 and 1100 <= int(num) <= 2099:
                 w = num2words(int(num), lang=lang, to="year")
                 if suffix == "s":  # 1980s -> nineteen eighties
